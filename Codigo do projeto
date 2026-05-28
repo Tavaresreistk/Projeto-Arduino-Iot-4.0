@@ -1,0 +1,113 @@
+
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+// Inicializa o display no endereço 0x27 (padrão do Tinkercad para o LCD I2C)
+// 16 colunas por 2 linhas
+LiquidCrystal_I2C lcd(0x20, 16, 2);
+
+int PINO_SGAS = A1;
+
+int LED_VERDE = 7;
+int LED_AMARELO = 6;
+int LED_VERMELHO = 5;
+int BUZZER = 4;
+int PINO_RELE = 2; // Pino do exaustor/relé
+
+int valorBruto = 0;
+int valorPercentual = 0;
+
+void setup() {
+  pinMode(LED_VERDE, OUTPUT);
+  pinMode(LED_AMARELO, OUTPUT);
+  pinMode(LED_VERMELHO, OUTPUT);
+  pinMode(BUZZER, OUTPUT);
+  pinMode(PINO_RELE, OUTPUT); // Configura o relé como saída
+
+  // Inicialização do LCD
+  lcd.init();
+  lcd.backlight(); // Liga a luz de fundo do display
+  
+  // Mensagem rápida de inicialização
+  lcd.setCursor(0, 0);
+  lcd.print("  INICIALIZANDO ");
+  lcd.setCursor(0, 1);
+  lcd.print("   SISTEMA...   ");
+  delay(2000);
+  lcd.clear();
+
+  Serial.begin(9600);
+}
+
+void loop() {
+  valorBruto = analogRead(PINO_SGAS);
+
+  // Converte para porcentagem
+  valorPercentual = map(valorBruto, 0, 1023, 0, 100);
+  valorPercentual = constrain(valorPercentual, 0, 100);
+
+  // Mostra os dados no Monitor Serial
+  Serial.print("Valor Bruto: ");
+  Serial.print(valorBruto);
+  Serial.print(" | Gas %: ");
+  Serial.println(valorPercentual);
+
+  // ---- ATUALIZAÇÃO DO DISPLAY (Linha 1) ----
+  // Limpa os espaços antigos e mostra a porcentagem atual fixada à esquerda
+  lcd.setCursor(0, 0);
+  lcd.print("Gas total: ");
+  lcd.print(valorPercentual);
+  lcd.print("%   "); // Espaços vazios evitam que números antigos fiquem "presos" na tela
+
+  // ---- LÓGICA DE ALERTA E CONDIÇÕES (Linha 2) ----
+  
+  // 1. ESTADO SEGURO
+  if (valorPercentual < 30) {
+    digitalWrite(LED_VERDE, HIGH);
+    digitalWrite(LED_AMARELO, LOW);
+    digitalWrite(LED_VERMELHO, LOW);
+    digitalWrite(PINO_RELE, LOW); // Exaustor desligado
+    noTone(BUZZER);
+
+    lcd.setCursor(0, 1);
+    lcd.print("STATUS: SEGURO  "); // 16 caracteres para cobrir a linha toda
+  }
+
+  // 2. ESTADO DE ATENÇÃO
+  else if (valorPercentual < 50) {
+    digitalWrite(LED_VERDE, LOW);
+    digitalWrite(LED_AMARELO, HIGH);
+    digitalWrite(LED_VERMELHO, LOW);
+    digitalWrite(PINO_RELE, LOW); // Exaustor desligado
+    noTone(BUZZER);
+
+    lcd.setCursor(0, 1);
+    lcd.print("ALERTA: ATENCAO ");
+  }
+
+  // 3. ESTADO CRÍTICO (LED Vermelho acende, mas sem som/exaustor ainda)
+  else if (valorPercentual < 65) {
+    digitalWrite(LED_VERDE, LOW);
+    digitalWrite(LED_AMARELO, LOW);
+    digitalWrite(LED_VERMELHO, HIGH);
+    digitalWrite(PINO_RELE, LOW); // Exaustor desligado
+    noTone(BUZZER);
+
+    lcd.setCursor(0, 1);
+    lcd.print("RISCO DE VAZAM. ");
+  }
+
+  // 4. ESTADO DE EMERGÊNCIA (Buzzer toca e Exaustor é acionado)
+  else {
+    digitalWrite(LED_VERDE, LOW);
+    digitalWrite(LED_AMARELO, LOW);
+    digitalWrite(LED_VERMELHO, HIGH);
+    digitalWrite(PINO_RELE, HIGH); // LIGA O EXAUSTOR!
+    tone(BUZZER, 1000); 
+
+    lcd.setCursor(0, 1);
+    lcd.print("PERIGO! EVACUAR ");
+  }
+
+  delay(250); // Aumentei ligeiramente o delay para o LCD não "piscar" visualmente de forma frenética
+}
